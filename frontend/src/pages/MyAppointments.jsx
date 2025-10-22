@@ -1,0 +1,259 @@
+// import React, { useContext, useEffect, useState } from 'react'
+// import {AppContext} from '../context/AppContext'
+// import axios from 'axios'
+// import { toast } from 'react-toastify';
+
+
+// const MyAppointments = () => {
+
+//     const { backendUrl, token} = useContext(AppContext)
+
+//     const [appointments,setAppointments] = useState([])
+
+//     // const getUserAppointments = async () => {
+//     //   try{
+//     //     const {data} =await axios.get(backendUrl + '/api/user/appointments', {headers: {Authorization: `Bearer ${token}`}})
+
+//     //     if(data.success){
+//     //       setAppointments(data.appointments.reverse())
+//     //       console.log(data.appointments)
+//     //     }
+//     //   }catch(error){
+//     //     console.log(error)
+//     //     toast.error(error.message)
+//     //   }
+//     // }
+
+//     // useEffect(() => {
+//     //   if(token){
+//     //     getUserAppointments()
+//     //   }
+//     // },[token])
+
+//   const getUserAppointments = async () => {
+//   try {
+//     const { data } = await axios.get(`${backendUrl}/api/user/appointments`, {
+//       headers: { Authorization: `Bearer ${token}` }
+//     });
+
+//     if (data.success) {
+//       setAppointments(data.appointments.flat().reverse()); // 🔥 Key fix
+//       console.log(data.appointments);
+//     }
+//   } catch (error) {
+//     console.log(error);
+//     toast.error(error.message);
+//   }
+// };
+
+// useEffect(() => {
+//       if(token){
+//         getUserAppointments()
+//       }
+//     },[token])
+
+
+//   return (
+//     <div>
+//       <p className='pb-3 mt-12 fot-medium text-zinc-700 bordre-b'>My appointments</p>
+//       <div>
+//         {appointments.slice(0,3).map((item,index) => (
+//           <div className='grid grid-cols-[1fr_2fr] gap-4 sm:flex sm:gap-6 py-2 border-b' key={index}>
+//               <div>
+//                 <img className='w-32 bg-indigo-50' src={item.docData.image} alt="" />
+//               </div>
+//               <div className='flex-1 text-sm text-zinc-600'>
+//                 <p className='text-neutral-800 font-semibold'>{item.docData.name}</p>
+//                 <p>{item.docData.speciality}</p>
+//                 <p className='text-zinc font-medium mt-1'>Address:</p>
+//                 <p className='text-xs'>{item.docData.address.line1}</p>
+//                 <p className='text-xs'>{item.docData.address.line2}</p>
+//                 <p className='text-xs mt-1'><span className='text-sm text-neutral-700 font-medium'>Date & Time:</span> {item.slotDate} | {item.slotTime}</p>
+//               </div>
+//               <div></div>
+//               <div className='flex flex-col gap-2 justify-end'>
+//                 <button className='text-sm text-stone-500 text-center sm:min-w-48 py-2 border hover:bg-primary hover:text-white transition-all duration-300'>Pay Online</button>
+//                 <button className='text-sm text-stone-500 text-center sm:min-w-48 py-2 border hover:bg-red-600 hover:text-white transition-all duration-300'>Cancel appointment</button>
+//               </div>
+//           </div>
+//         ))}
+//       </div>
+//     </div>
+//   )
+// }
+
+// export default MyAppointments
+
+
+
+
+// ___________________________________NEW____________________________________________
+import React, { useContext, useEffect, useState } from 'react';
+import { AppContext } from '../context/AppContext';
+import axios from 'axios';
+import { toast } from 'react-toastify';
+import {useNavigate} from 'react-router-dom'
+const MyAppointments = () => {
+  const { backendUrl, token, getDoctorsData } = useContext(AppContext);
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const months = ['', 'Jan','Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+  const slotDateFormat = (slotDate) => {
+    const dateArray = slotDate.split('_')
+    return dateArray[0]+ " "+months[Number(dateArray[1])] + " " + dateArray[2]
+  }
+
+  const navigate = useNavigate()
+
+  const getUserAppointments = async () => {
+    try {
+      const { data } = await axios.get(`${backendUrl}/api/user/appointments`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (data.success) {
+        setAppointments(data.appointments.reverse());
+        console.log('✅ Appointments:', data.appointments);
+      } else {
+        toast.error('Failed to fetch appointments.');
+      }
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // useEffect(() => {
+  //   if (token) {
+  //     getUserAppointments();
+  //   }
+  // }, [token]);
+
+  const cancelAppointment = async(appointmentId) => {
+    try{
+
+      const {data} = await axios.post(backendUrl + '/api/user/cancel-appointment', {appointmentId},{headers: { Authorization: `Bearer ${token}` }})
+      if(data){
+        toast.success(data.message)
+        getUserAppointments()
+        getDoctorsData()
+      }else{
+        toast.error(data.message)
+      }
+    }catch(error){
+      console.log(error)
+      toast.error(error.message)
+    }
+  }
+
+  const initPay = (order) => {
+    const options = {
+      key:import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount:order.amount,
+      currency:order.currency,
+      name:'Appointment Payment',
+      description:'Appointment Payment',
+      order_id:order.id,
+      receipt:order.receipt,
+      handler:async(response) => {
+        console.log(response)
+
+        try{
+          const {data} = await axios.post(backendUrl + '/api/user/verifyRazorpay', response,{headers: { Authorization: `Bearer ${token}` }})
+          if(data.success){
+            getUserAppointments()
+            navigate('/my-appointments')
+          }
+        }catch(error){
+          console.log(error)
+          toast.error(error.message)
+        }
+
+      }
+    }
+
+    const rzp = new window.Razorpay(options)
+    rzp.open()
+  }
+
+  const appointmentRazorpay = async(appointmentId) => {
+    try{
+      const {data} = await axios.post(backendUrl + '/api/user/payment-razorpay', {appointmentId},{headers: { Authorization: `Bearer ${token}` }})
+      if(data.success){
+        initPay(data.order)
+      }
+
+    }catch(error){
+
+    }
+  }
+
+  useEffect(() => {
+    if (token) {
+      getUserAppointments();
+    }
+  }, [token]);
+
+  return (
+    <div className="px-4 sm:px-8 lg:px-12">
+      <p className="pb-3 mt-12 font-medium text-zinc-700 border-b text-lg">
+        My Appointments
+      </p>
+
+      {loading ? (
+        <p className="mt-6 text-zinc-500">Loading appointments...</p>
+      ) : appointments.length === 0 ? (
+        <p className="mt-6 text-zinc-500">You have no appointments yet.</p>
+      ) : (
+        appointments.map((item) => (
+          <div
+            className="grid grid-cols-[1fr_2fr] gap-4 sm:flex sm:gap-6 py-4 border-b"
+            key={item._id || `${item.slotDate}-${item.slotTime}`}
+          >
+            <div>
+              <img
+                className="w-32 h-32 object-cover bg-indigo-50 rounded"
+                src={item.docData?.image || '/default-doctor.jpg'}
+                alt="Doctor"
+              />
+            </div>
+
+            <div className="flex-1 text-sm text-zinc-600">
+              <p className="text-neutral-800 font-semibold">
+                {item.docData?.name || 'Doctor Name'}
+              </p>
+              <p>{item.docData?.speciality || 'Speciality'}</p>
+              <p className="text-zinc font-medium mt-1">Address:</p>
+              <p className="text-xs">{item.docData?.address?.line1 || 'Line 1'}</p>
+              <p className="text-xs">{item.docData?.address?.line2 || 'Line 2'}</p>
+              <p className="text-xs mt-1">
+                <span className="text-sm text-neutral-700 font-medium">Date & Time:</span>{' '}
+                {slotDateFormat(item.slotDate)} | {item.slotTime}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 justify-end">
+              {!item.cancelled &&  item.payment && item.payment && !item.isCompleted && <button className='sm:min-w-48 py-2 border rounded text-stone-500 bg-indigo-50'>Paid</button>}
+              {!item.cancelled && !item.payment && !item.payment && !item.isCompleted &&  <button onClick={()=> appointmentRazorpay(item._id)} className="text-sm text-stone-500 text-center sm:min-w-48 py-2 border hover:bg-primary hover:text-white transition-all duration-300">
+                Pay Online
+              </button> }
+              
+              {!item.cancelled && !item.isCompleted && <button onClick={() => cancelAppointment(item._id)} className="text-sm text-stone-500 text-center sm:min-w-48 py-2 border hover:bg-red-600 hover:text-white transition-all duration-300">
+                Cancel appointment
+              </button> }
+
+              {item.cancelled && !item.isCompleted && <button className='sm:min-w-48 py-2 border border-red-500 rounded text-red-500'>Appointment Cancelled</button>}
+              {item.isCompleted && <button className='sm:min-w-48 py-2 border border-green-500 rounded text-green-500'>Completed</button>}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+};
+
+export default MyAppointments;
